@@ -62,8 +62,7 @@ We first try a grid of k from 1 to 101, calculate their average error rate in 5 
 
 </br>
 
-![](HW2_Q3_files/figure-markdown_github/unnamed-chunk-10-1.png)
-
+![](/Rplot01.png)
 
  </br>
 Then we get the confusion matrix, overall error rate, TPR and FPR by averaging across 100 rounds. The average overall error rate is around 37.5%, which is better than linear regression model.
