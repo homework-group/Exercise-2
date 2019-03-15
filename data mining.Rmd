@@ -209,7 +209,7 @@ Fisrt step, in order to hold patient risk factors eauql,we use the whole data se
 Second step, we predict the result that whether a patient need to "recall"
 Third step, we compare the radiologist's judge and model's judge, to determine whether the radiologist is clinically conservative.
 ```{r,echo=FALSE}
-logit1 = glm(recall~ ., data = brca)
+logit1 = glm(recall~ . -cancer, data = brca)
 phat_logit = predict(logit1,brca,type = 'response')
 yhat_logit1 = ifelse(phat_logit > 0.5, 1, 0)
 confusion_out_logit = table(y= brca$radiologist,brca$recall, yhat = yhat_logit1)
@@ -217,12 +217,13 @@ confusion_out_logit
 ```
 Last, we calculate which radiologist's probabilty of giving 'recall' to a patient that doesn't need 'recall' is the highest.
 ```{r}
-25/(165+25)
-14/(177+14)
-33/(157+33)
-22/(168+22)
+29/(169+29)
+17/(180+17)
+37/(161+37)
+38/(159+38)
+27/(170+27)
 ```
-Thus, radiologist66 and radiologist89 is more clinically conservative compared to other radiologists.
+Thus, radiologist89 is most clinically conservative compared to other radiologists.
 
 Part 2
 In order to show which model is much suitable, we calculate the RMSE and log likelihood in this question. And split the dataset into train set and test set.
