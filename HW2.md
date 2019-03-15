@@ -148,7 +148,7 @@ Here is our KNN model using the same variables and standardized. Some are necess
     ## Warning in if (k < 1) stop(gettextf("k = %d must be at least 1", k), domain
     ## = NA): the condition has length > 1 and only the first element will be used
 
-![](data_mining_files/figure-markdown_github/unnamed-chunk-3-1.png)
+![](/Rplot01.png)
 
     ## [1] 68475.14
 
@@ -497,7 +497,7 @@ We first try a grid of k from 1 to 101, calculate their average error rate in 5 
 
 </br>
 
-![](/Rplot01.png)
+![](/Rplot02.png)
 
  </br>
 Then we get the confusion matrix, overall error rate, TPR and FPR by averaging across 100 rounds. The average overall error rate is around 37.5%, which is better than linear regression model.
