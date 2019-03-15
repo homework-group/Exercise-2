@@ -188,3 +188,118 @@ which.min(rmse_grid_out[,2])
 
 ```
 Above is a plot of RMSE versus K. K is on the x axis and RMSE is on the y axis. We see that the RMSE is minimized when k about equal to 77. The RMSE in our linear model is lower than that of our KNN model likely due to dropping the string varaibles. The linear model seems to do the best looking at out of sample (we split into train and test to see this). The KNN model, if we would like to use it, performs best when we have k=77. 
+
+
+
+title: "Question 2"
+output: github_document
+---
+Part 1:
+Which radiologist is much more clinically conservative?
+```{r,include=FALSE}
+library(tidyverse)
+library(mosaic)
+library(nnet)
+setwd("~/Desktop/")
+brca <- read.csv("brca.csv")
+```
+
+When radiologist gave recall the patient after seeing the mammograms when the patient doesn't need that, we think the radiologist is more clinically conservative.
+Fisrt step, in order to hold patient risk factors eauql,we use the whole data set to do the logistic regrssion, to set the model which can be uesd to judge the probability that the patient need to recall after her mammogram seen by the radiologist.
+Second step, we predict the result that whether a patient need to "recall"
+Third step, we compare the radiologist's judge and model's judge, to determine whether the radiologist is clinically conservative.
+```{r,echo=FALSE}
+logit1 = glm(recall~ ., data = brca)
+phat_logit = predict(logit1,brca,type = 'response')
+yhat_logit1 = ifelse(phat_logit > 0.5, 1, 0)
+confusion_out_logit = table(y= brca$radiologist,brca$recall, yhat = yhat_logit1)
+confusion_out_logit
+```
+Last, we calculate which radiologist's probabilty of giving 'recall' to a patient that doesn't need 'recall' is the highest.
+```{r}
+25/(165+25)
+14/(177+14)
+33/(157+33)
+22/(168+22)
+```
+Thus, radiologist66 and radiologist89 is more clinically conservative compared to other radiologists.
+
+Part 2
+In order to show which model is much suitable, we calculate the RMSE and log likelihood in this question. And split the dataset into train set and test set.
+```{r,echo=FALSE}
+rmse = function(y, yhat) {
+  sqrt( mean( (y - yhat)^2 ) )
+}
+repN=100
+rmse_vals = do(100)*{
+  n = nrow(brca)
+  n_train = round(0.8*n)  
+  n_test = n - n_train
+  
+  train_cases = sample.int(n, n_train, replace=FALSE)
+  test_cases = setdiff(1:n, train_cases)
+  train_cases
+  test_cases
+  
+  brca_train = brca[train_cases,]
+  brca_test = brca[test_cases,]
+  logit2_fit = glm(cancer ~ recall,data = brca_train)
+  logit3_fit = glm(cancer ~ recall + history, data=brca_train)
+  logit4_fit = glm(cancer ~ recall + history + recall*history, data=brca_train)
+  logit5_fit = glm(cancer ~., data = brca_train)
+  yhat_test1 = predict(logit2_fit, brca_test)
+  yhat_test2 = predict(logit3_fit, brca_test)
+  yhat_test3 = predict(logit4_fit, brca_test)
+  yhat_test4 = predict(logit5_fit, brca_test)
+  
+  c(rmse(brca_test$cancer, yhat_test1),
+    rmse(brca_test$cancer, yhat_test2),
+    rmse(brca_test$cancer, yhat_test3),
+    rmse(brca_test$cancer, yhat_test4))
+  
+ }
+rmse_vals
+colMeans(rmse_vals)
+```
+According to the RMSE, we found that the model only link the recall and cancer is the most suitable to predict cancer status.
+```{r,echo=FALSE}
+rss = function(y, yhat) {
+  sum( (y - yhat)^2 ) 
+}
+rss_vals = do(100)*{
+ 
+  n = nrow(brca)
+  n_train = round(0.8*n)  # round to nearest integer
+  n_test = n - n_train
+  
+  train_cases = sample.int(n, n_train, replace=FALSE)
+  test_cases = setdiff(1:n, train_cases)
+  train_cases
+  test_cases
+  
+  brca_train = brca[train_cases,]
+  brca_test = brca[test_cases,]
+  #set the fit model using the train data set  
+  logit2_fit = glm(cancer ~ recall,data = brca_train)
+  logit3_fit = glm(cancer ~ recall + history, data=brca_train)
+  logit4_fit = glm(cancer ~ recall + history + recall*history, data=brca_train)
+  logit5_fit = glm(cancer ~., data = brca_train)
+  
+  yhat_test1 = predict(logit2_fit, brca_test)
+  yhat_test2 = predict(logit3_fit, brca_test)
+  yhat_test3 = predict(logit4_fit, brca_test)
+  yhat_test4 = predict(logit5_fit, brca_test)
+  
+  c(rss(brca_test$cancer, yhat_test1),
+    rss(brca_test$cancer, yhat_test2),
+    rss(brca_test$cancer, yhat_test3),
+    rss(brca_test$cancer, yhat_test4))
+  
+  
+}
+rss_vals*-1/2
+colMeans(rss_vals*-1/2)
+```
+According to the RSS, we also found that the model only link the recall and cancer is the most suitable to predict cancer status.
+
+Since the radiologist's opinion to 'recall' or not, is depended on the cancer status, thus if we include more covariates, there will be multicollinearity in the model and cause the result deviance bigger.
