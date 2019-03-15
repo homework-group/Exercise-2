@@ -390,7 +390,7 @@ Here is our KNN model using the same variables and standardized. Some are necess
     ## 
     ##     accumulate, when
 
-![](data_mining_files/figure-markdown_github/unnamed-chunk-3-1.png)
+![](data_mining_files/figure-markdown_github/Rplot01.png)
 
     ## [1] 65917.35
 
