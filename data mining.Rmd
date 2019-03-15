@@ -303,3 +303,414 @@ colMeans(rss_vals*-1/2)
 According to the RSS, we also found that the model only link the recall and cancer is the most suitable to predict cancer status.
 
 Since the radiologist's opinion to 'recall' or not, is depended on the cancer status, thus if we include more covariates, there will be multicollinearity in the model and cause the result deviance bigger.
+
+
+---
+title: "HW2 Q3"
+output: github_document
+---
+
+
+```{r setup, include=FALSE}
+rm(list=ls())
+library(rmarkdown)
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+```{r, include=FALSE}
+library(tidyverse)
+library(mosaic)
+library(foreach)
+setwd("~/Desktop/statistical learning/code/data")
+online = read.csv("online_news.csv") 
+online$url<-NULL
+```
+
+
+
+## Predicting when articles go viral
+
+In this question, we use regression and classification to predict when articals go viral.
+
+&NewLine;
+
+</br>
+
+
+```{r, include=FALSE}
+# 0. Preparation: train-test split
+n = nrow(online)
+n_train = round(0.8*n)
+n_test = n - n_train
+X = online
+y = ifelse(online$shares >= 1400, 1, 0)
+```
+
+
+###1. Baseline model
+
+ We always predict that the artical will go viral, since the number of viral articals is larger than the number of non-viral articals.
+ 
+  
+```{r}
+table(y) 
+```
+
+
+```{r, warning=FALSE, message=FALSE}
+repN=100
+conf11 <- rep(0,repN)
+conf12 <- rep(0,repN)
+conf21 <- rep(0,repN)
+conf22 <- rep(0,repN)
+for (i in 1:repN){
+  train_ind = sample.int(n, n_train)
+  y_train = y[train_ind]
+  y_test = y[-train_ind]
+  base_pred = rep(1, n_test)
+  
+  # Average confusion matrix
+  conf12[i] <- table(y = y_test, yhat = base_pred)[1,1]
+  conf22[i] <- table(y = y_test, yhat = base_pred)[2,1]
+}
+confusion_matrix <- matrix(c(mean(conf11),mean(conf12),mean(conf21),mean(conf22)),ncol=2,byrow=TRUE)
+colnames(confusion_matrix) <- c("y=0","y=1")
+rownames(confusion_matrix) <- c("yhat=0","yhat=1")
+confusion_matrix <- as.table(confusion_matrix)
+overall_error <- (confusion_matrix[1,2]+confusion_matrix[2,1])/length(y_test)
+true_positive_rate <-  confusion_matrix[2,2] / (confusion_matrix[2,1]+confusion_matrix[2,2])
+false_positive_rate <-  confusion_matrix[1,2] / (confusion_matrix[1,1]+confusion_matrix[1,2])
+```
+
+&NewLine;
+
+</br>
+The average confusion matrix for this baseline model is
+
+
+```{r, include=TRUE}
+confusion_matrix
+overall_error
+```
+
+&NewLine;
+
+</br>
+And the average overall error rate is
+
+```{r, include=TRUE}
+overall_error
+```
+By construction of the baseline model, true positive and false positive rate are both 0.
+ 
+  
+  
+&NewLine;
+</br>  
+&NewLine;
+</br>
+
+###2. Regression & threshold
+&NewLine;
+</br>  
+
+#### 1) Linear regression
+
+&NewLine;
+</br>  
+Selecting the variables and applying linear regression with linear effect only, we get overall error rate around 46.0%, which is nearly the same as the baseline model.
+Selecting the variables and applying regression with quadratic effect, we get overall error rate around 43%, which is slightly better than the baseline model.
+
+```{r, warning=FALSE, message=FALSE}
+train_ind = sample.int(n, n_train)
+  y_train = y[train_ind]
+  y_test = y[-train_ind]
+  X_train = X[train_ind,]
+  X_test = X[-train_ind,]
+  
+lm1 = lm(shares ~ . - weekday_is_sunday - is_weekend, data=X_train)
+lm2 = lm(shares ~ n_tokens_title  + num_self_hrefs + num_imgs +
+           average_token_length + num_keywords + 
+           data_channel_is_lifestyle + data_channel_is_entertainment+data_channel_is_bus +data_channel_is_socmed +
+           data_channel_is_tech + data_channel_is_world +
+           self_reference_min_shares + is_weekend + avg_negative_polarity , data=X_train)
+lm3 = lm(shares ~ (.)^2, data=X_train)   # this performs the best
+lm4 = lm(shares ~ n_tokens_title + num_hrefs + num_self_hrefs + num_imgs +
+           average_token_length + num_keywords + 
+           data_channel_is_lifestyle + data_channel_is_entertainment+data_channel_is_bus+
+           data_channel_is_socmed + data_channel_is_tech + data_channel_is_world +
+           self_reference_min_shares + is_weekend + avg_negative_polarity+
+           
+           n_tokens_title*self_reference_min_shares + num_hrefs*data_channel_is_tech +
+           num_self_hrefs*self_reference_min_shares + average_token_length*self_reference_min_shares +
+           data_channel_is_bus*avg_negative_polarity+data_channel_is_socmed*self_reference_min_shares +
+           data_channel_is_tech*self_reference_min_shares +
+           self_reference_min_shares*avg_negative_polarity
+         , data=X_train)
+```
+
+
+```{r, warning=FALSE, message=FALSE}
+# Average confusion matrix
+for (i in 1:repN){
+  train_ind = sample.int(n, n_train)
+  y_train = y[train_ind]
+  y_test = y[-train_ind]
+  X_train = X[train_ind,]
+  X_test = X[-train_ind,]
+  
+  lm = lm(shares ~ (.)^2, data=X_train)
+  lm_share = predict(lm, X_test)
+  lm_yhat = ifelse(lm_share >= 1400, 1, 0)
+  
+  # Average confusion matrix
+  conf11[i] <- table(y = y_test, yhat = lm_yhat)[1,1]
+  conf12[i] <- table(y = y_test, yhat = lm_yhat)[1,2]
+  conf21[i] <- table(y = y_test, yhat = lm_yhat)[2,1]
+  conf22[i] <- table(y = y_test, yhat = lm_yhat)[2,2]
+}
+confusion_matrix <- matrix(c(mean(conf11),mean(conf12),mean(conf21),mean(conf22)),ncol=2,byrow=TRUE)
+colnames(confusion_matrix) <- c("y=0","y=1")
+rownames(confusion_matrix) <- c("yhat=0","yhat=1")
+confusion_matrix <- as.table(confusion_matrix)
+overall_error <- (confusion_matrix[1,2]+confusion_matrix[2,1])/length(y_test)
+true_positive_rate <-  confusion_matrix[2,2] / (confusion_matrix[2,1]+confusion_matrix[2,2])
+false_positive_rate <-  confusion_matrix[1,2] / (confusion_matrix[1,1]+confusion_matrix[1,2])
+```
+
+&NewLine;
+
+</br>
+
+#### 2) KNN
+
+&NewLine;
+</br>  
+
+We first try a grid of k from 1 to 101, calculate their average error rate in 5 trials, and select an optimal k. We select k=61 in this case.
+
+
+&NewLine;
+
+</br>
+
+```{r, warning=FALSE, message=FALSE}
+X = online %>%
+  select(n_tokens_title, num_hrefs, num_self_hrefs, num_imgs, average_token_length,
+         self_reference_min_shares, is_weekend,avg_negative_polarity,
+         data_channel_is_entertainment, data_channel_is_socmed, data_channel_is_world, title_sentiment_polarity)
+k_grid = seq(1, 101, by=10)
+err_grid = foreach(k = k_grid,  .combine='c') %do% {
+  out = do(5)*{
+    train_ind = sample.int(n, n_train)
+    X_train = X[train_ind,]
+    X_test = X[-train_ind,]
+    y_train = y[train_ind]
+    y_test = y[-train_ind]
+    
+    # scale the train set x
+    scale_factors = apply(X_train, 2, sd)
+    X_train_sc = scale(X_train, scale=scale_factors)
+    
+    # scale the test set x using the same scale factors
+    X_test_sc = scale(X_test, scale=scale_factors)
+    
+    # Fit KNN models
+    knn_try = class::knn(train=X_train_sc, test= X_test_sc, cl=y_train, k=k)
+    # overall error rate
+    sum(knn_try != y_test)/n_test
+  } 
+  
+  mean(out$result)
+  
+}
+```
+ 
+```{r}
+plot(k_grid, err_grid)
+```
+  
+&NewLine;
+</br>  
+Then we get the confusion matrix, overall error rate, TPR and FPR by averaging across 100 rounds.
+The average overall error rate is around 37.5%, which is better than linear regression model.
+  
+```{r, warning=FALSE, message=FALSE}
+# Get the average accuracy for k=61
+repN=30
+conf11 <- rep(0,repN)
+conf12 <- rep(0,repN)
+conf21 <- rep(0,repN)
+conf22 <- rep(0,repN)
+for (i in 1:repN){
+  train_ind = sample.int(n, n_train)
+  y_train = y[train_ind]
+  y_test = y[-train_ind]
+  X_train = X[train_ind,]
+  X_test = X[-train_ind,]
+  
+  # scale the train set x
+  scale_factors = apply(X_train, 2, sd)
+  X_train_sc = scale(X_train, scale=scale_factors)
+  # scale the test set x using the same scale factors
+  X_test_sc = scale(X_test, scale=scale_factors)
+  
+  # Fit KNN models
+  knn_yhat = class::knn(train=X_train_sc, test= X_test_sc, cl=y_train, k=61)
+  
+  # Average confusion matrix
+  conf11[i] <- table(y = y_test, yhat = knn_yhat)[1,1]
+  conf12[i] <- table(y = y_test, yhat = knn_yhat)[1,2]
+  conf21[i] <- table(y = y_test, yhat = knn_yhat)[2,1]
+  conf22[i] <- table(y = y_test, yhat = knn_yhat)[2,2]
+}
+confusion_matrix <- matrix(c(mean(conf11),mean(conf12),mean(conf21),mean(conf22)),ncol=2,byrow=TRUE)
+colnames(confusion_matrix) <- c("y=0","y=1")
+rownames(confusion_matrix) <- c("yhat=0","yhat=1")
+confusion_matrix <- as.table(confusion_matrix)
+overall_error <- (confusion_matrix[1,2]+confusion_matrix[2,1])/length(y_test)
+true_positive_rate <-  confusion_matrix[2,2] / (confusion_matrix[2,1]+confusion_matrix[2,2])
+false_positive_rate <-  confusion_matrix[1,2] / (confusion_matrix[1,1]+confusion_matrix[1,2])
+```
+
+&NewLine;
+
+</br>
+
+Confusion matrix:
+
+```{r}
+confusion_matrix
+```
+
+&NewLine;
+
+</br>
+
+Overall error rate =
+```{r}
+overall_error
+```
+&NewLine;
+
+</br>
+TPR =
+```{r}
+true_positive_rate
+```
+&NewLine;
+
+</br>
+FPR =
+```{r}
+false_positive_rate 
+```
+&NewLine;
+
+</br>
+&NewLine;
+
+</br>
+
+###3. Threshold & classification
+
+
+&NewLine;
+
+</br>
+
+We first categorize the articals into viral and non-viral using 1400 shares as threshold.
+Then we use logit regression to do the classification. We used similar variable selection as linear regression model. The confusion matrix, overall error rate, TPR and FPR averaging across 100 rounds are as below:
+
+
+&NewLine;
+
+</br>
+
+
+&NewLine;
+
+</br>
+
+```{r, warning=FALSE, message=FALSE}
+online$viral = ifelse(online$shares >= 1400, 1, 0)
+X=online
+X$shares <- NULL
+### 1) Logit regression
+X_train = X[train_ind,]
+X_test = X[-train_ind,]
+glm1 = glm(viral ~ . - weekday_is_sunday - is_weekend, data=X_train, family='binomial')
+repN=100
+conf11 <- rep(0,repN)
+conf12 <- rep(0,repN)
+conf21 <- rep(0,repN)
+conf22 <- rep(0,repN)
+for (i in 1:repN){
+  train_ind = sample.int(n, n_train)
+  y_train = y[train_ind]
+  y_test = y[-train_ind]
+  X_train = X[train_ind,]
+  X_test = X[-train_ind,]
+  
+  glm=glm(viral ~ n_tokens_content +num_hrefs+ num_self_hrefs + num_imgs +
+            average_token_length + num_keywords + 
+            data_channel_is_lifestyle + data_channel_is_entertainment+data_channel_is_bus +data_channel_is_socmed +
+            data_channel_is_tech + data_channel_is_world +
+            self_reference_min_shares + is_weekend + min_positive_polarity+title_sentiment_polarity, data=X_train, family='binomial')
+  phat_test_logit = predict(glm, X_test, type='response')
+  yhat_test_logit = ifelse(phat_test_logit > 0.5, 1, 0)
+  
+  # Average confusion matrix
+  conf11[i] <- table(y = y_test, yhat = yhat_test_logit)[1,1]
+  conf12[i] <- table(y = y_test, yhat = yhat_test_logit)[1,2]
+  conf21[i] <- table(y = y_test, yhat = yhat_test_logit)[2,1]
+  conf22[i] <- table(y = y_test, yhat = yhat_test_logit)[2,2]
+}
+confusion_matrix <- matrix(c(mean(conf11),mean(conf12),mean(conf21),mean(conf22)),ncol=2,byrow=TRUE)
+colnames(confusion_matrix) <- c("y=0","y=1")
+rownames(confusion_matrix) <- c("yhat=0","yhat=1")
+confusion_matrix <- as.table(confusion_matrix)
+overall_error <- (confusion_matrix[1,2]+confusion_matrix[2,1])/length(y_test)
+true_positive_rate <-  confusion_matrix[2,2] / (confusion_matrix[2,1]+confusion_matrix[2,2])
+false_positive_rate <-  confusion_matrix[1,2] / (confusion_matrix[1,1]+confusion_matrix[1,2])
+```
+
+
+&NewLine;
+
+</br>
+
+Confusion matrix:
+
+```{r}
+confusion_matrix
+```
+
+&NewLine;
+
+</br>
+
+Overall error rate =
+```{r}
+overall_error
+```
+&NewLine;
+
+</br>
+TPR =
+```{r}
+true_positive_rate
+```
+&NewLine;
+
+</br>
+FPR =
+```{r}
+false_positive_rate 
+```
+
+&NewLine;
+
+</br>
+The average overall error rate is around 36%, which is better than regression & threshold method. The reason might be that by first classifying the y using threshold, the model are less prone to outliers with extreme number of shares.
+
