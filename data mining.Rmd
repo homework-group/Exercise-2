@@ -1,0 +1,196 @@
+---
+title: "HW2 Q1"
+output: github_document
+---
+
+
+Saratoga house prices: 
+Describing the price-modeling strategies for a local taxing authority: 
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(mosaic)
+library(foreach)
+data(SaratogaHouses)
+
+summary(SaratogaHouses)
+```
+
+```{r, echo=FALSE}
+# Baseline model
+lm_small = lm(price ~ bedrooms + bathrooms + lotSize, data=SaratogaHouses)
+
+# 11 main effects
+lm_medium = lm(price ~ lotSize + age + livingArea + pctCollege + bedrooms + 
+                 fireplaces + bathrooms + rooms + heating + fuel + centralAir, data=SaratogaHouses)
+
+# Sometimes it's easier to name the variables we want to leave out
+# The command below yields exactly the same model.
+# the dot (.) means "all variables not named"
+# the minus (-) means "exclude this variable"
+lm_medium2 = lm(price ~ . - sewer - waterfront - landValue - newConstruction, data=SaratogaHouses)
+
+coef(lm_medium)
+coef(lm_medium2)
+
+# All interactions
+# the ()^2 says "include all pairwise interactions"
+lm_big = lm(price ~ (. - sewer - waterfront - landValue - newConstruction)^2, data=SaratogaHouses)
+
+
+####
+# Compare out-of-sample predictive performance
+####
+
+# Split into training and testing sets
+n = nrow(SaratogaHouses)
+n_train = round(0.8*n)  # round to nearest integer
+n_test = n - n_train
+train_cases = sample.int(n, n_train, replace=FALSE)
+test_cases = setdiff(1:n, train_cases)
+saratoga_train = SaratogaHouses[train_cases,]
+saratoga_test = SaratogaHouses[test_cases,]
+
+# Fit to the training data
+lm1 = lm(price ~ lotSize + bedrooms + bathrooms, data=saratoga_train)
+lm2 = lm(price ~ . - sewer - waterfront - landValue - newConstruction, data=saratoga_train)
+lm3 = lm(price ~ (. - sewer - waterfront - landValue - newConstruction)^2, data=saratoga_train)
+
+# Predictions out of sample
+yhat_test1 = predict(lm1, saratoga_test)
+yhat_test2 = predict(lm2, saratoga_test)
+yhat_test3 = predict(lm3, saratoga_test)
+
+rmse = function(y, yhat) {
+  sqrt( mean( (y - yhat)^2 ) )
+}
+
+# Root mean-squared prediction error
+rmse(saratoga_test$price, yhat_test1)
+rmse(saratoga_test$price, yhat_test2)
+rmse(saratoga_test$price, yhat_test3)
+
+
+# easy averaging over train/test splits
+library(mosaic)
+
+rmse_vals = do(100)*{
+  
+  # re-split into train and test cases
+  n_train = round(0.8*n)  # round to nearest integer
+  n_test = n - n_train
+  train_cases = sample.int(n, n_train, replace=FALSE)
+  test_cases = setdiff(1:n, train_cases)
+  saratoga_train = SaratogaHouses[train_cases,]
+  saratoga_test = SaratogaHouses[test_cases,]
+  
+  # fit to this training set
+  lm2 = lm(price ~ . - sewer - waterfront - landValue - newConstruction, data=saratoga_train)
+  
+  lm_boom = lm(price ~ lotSize + age + pctCollege + 
+                 fireplaces + rooms + heating + fuel + centralAir +
+                 bedrooms*rooms + bathrooms*rooms + 
+                 bathrooms*livingArea, data=saratoga_train)
+  
+  lm_biggerboom = lm(price ~ lotSize + landValue + waterfront + newConstruction + bedrooms*bathrooms + heating + fuel + pctCollege + rooms*bedrooms + rooms*bathrooms + rooms*heating + livingArea, data=saratoga_train)
+  
+  
+  # predict on this testing set
+  yhat_test2 = predict(lm2, saratoga_test)
+  yhat_testboom = predict(lm_boom, saratoga_test)
+  yhat_testbiggerboom = predict(lm_biggerboom, saratoga_test)
+  c(rmse(saratoga_test$price, yhat_test2),
+    rmse(saratoga_test$price, yhat_testboom),
+    rmse(saratoga_test$price, yhat_testbiggerboom))
+}
+
+rmse_vals
+colMeans(rmse_vals)
+```
+Here is a hand-built model (lm_hw) that outperforms the "medium" model considered in class. The lower RMSE indicates that lm_hw outperforms lm_medium and the lm_boom models that we considered in class. The interaction between bedrooms and bathrooms seems to be an especially strong driver of house prices. 
+
+```{r,echo=FALSE }
+
+
+# re-split into train and test cases
+n_train = round(0.8*n)  # round to nearest integer
+n_test = n - n_train
+train_cases = sample.int(n, n_train, replace=FALSE)
+test_cases = setdiff(1:n, train_cases)
+saratoga_train = SaratogaHouses[train_cases,]
+saratoga_test = SaratogaHouses[test_cases,]
+
+# fit to this training set
+lm2 = lm(price ~ . - sewer - waterfront - landValue - newConstruction, data=saratoga_train)
+
+lm_hw = lm(price ~ lotSize + landValue + waterfront + newConstruction + bedrooms*bathrooms + heating + fuel + pctCollege + rooms*bathrooms + livingArea, data=saratoga_train)
+
+
+# predict on this testing set
+yhat_test2 = predict(lm2, saratoga_test)
+yhat_testhw = predict(lm_hw, saratoga_test)
+c(rmse(saratoga_test$price, yhat_test2),
+  rmse(saratoga_test$price, yhat_testhw))
+```
+
+Here is our KNN model using the same variables and standardized. Some are necessarily dropped because they are string variables.  
+
+```{r, echo=FALSE}
+
+library(mosaic)
+library(tidyverse)
+library(FNN)
+
+
+# create a train/test split
+N = nrow(SaratogaHouses)
+N_train = floor(0.8*N)
+train_ind = sample.int(N, N_train, replace=FALSE)
+
+ST_train = SaratogaHouses[train_ind,]
+ST_test = SaratogaHouses[-train_ind,]
+
+y_train_ST = ST_train$price
+X_train_ST = data.frame(lotSize = ST_train$lotSize, landValue = ST_train$landValue, bedrooms_bathrooms = ST_train$bedrooms*ST_train$bathrooms,
+                        pctCollege = ST_train$pctCollege,
+                        rooms_bathrooms = ST_train$rooms*ST_train$bathrooms, 
+                        livingArea = ST_train$livingArea)
+y_test_ST = ST_test$price
+X_test_ST = data.frame(lotSize = ST_test$lotSize, landValue = ST_test$landValue,
+                       bedrooms_bathrooms = ST_test$bedrooms*ST_test$bathrooms,
+                       pctCollege = ST_test$pctCollege,
+                       rooms_bathrooms = ST_test$rooms*ST_test$bathrooms, 
+                       livingArea = ST_test$livingArea)
+
+rmse = function(y, ypred) {
+  sqrt(mean((y-ypred)^2))
+}
+
+
+
+# scale the training set features
+scale_factors = apply(X_train_ST, 2, sd)
+X_train_sc = scale(X_train_ST, scale=scale_factors)
+
+# scale the test set features using the same scale factors
+X_test_sc = scale(X_test_ST, scale=scale_factors)
+
+# Fit two KNN models (notice the odd values of K)
+k=1:100
+knnk = class::knn(train=X_train_sc, test= X_test_sc, cl=y_train_ST, k=k)
+
+k_grid = unique(round(exp(seq(log(N_train), log(2), length=100))))
+rmse_grid_out = foreach(k = k_grid, .combine='c') %do% {
+  knn_model = knn.reg(X_train_ST, X_test_ST, y_train_ST, k = k)
+  rmse(y_test_ST, knn_model$pred)
+}
+
+
+rmse_grid_out = data.frame(K = k_grid, RMSE = rmse_grid_out)
+ggplot(rmse_grid_out)+
+  geom_line(rmse_grid_out,mapping = aes(x=rmse_grid_out[,1],y=rmse_grid_out[,2]))
+min(rmse_grid_out[,2])
+which.min(rmse_grid_out[,2])
+
+```
+Above is a plot of RMSE versus K. K is on the x axis and RMSE is on the y axis. We see that the RMSE is minimized when k= 77. The RMSE in our linear model is lower than that of our KNN model likely due to dropping the string varaibles. The linear model seems to do the best looking at out of sample (we split into train and test to see this). The KNN model, if we would like to use it, performs best when we have k=77. 
